@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OBDII-Backend")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3847a9d7be4d52c0c8f4a098612ba6b64dd03a40")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a9691a5a67e48dd0ba580b0fde1840ab40302669")]
 [assembly: System.Reflection.AssemblyProductAttribute("OBDII-Backend")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OBDII-Backend")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
