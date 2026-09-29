@@ -1,0 +1,19 @@
+# Ambiente virtual e segredos
+.venv/
+venv/
+.env
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Django
+db.sqlite3
+staticfiles/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
