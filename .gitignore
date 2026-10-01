@@ -1,0 +1,26 @@
+## .NET Build outputs
+[Bb]in/
+[Oo]bj/
+out/
+
+## Visual Studio / VS Code / JetBrains
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+## Secrets & Local configurations
+.env
+*.pem
+appsettings.Development.json
+appsettings.*.local.json
+
+## Logs
+*.log
+
+## OS generated files
+.DS_Store
+Thumbs.db
