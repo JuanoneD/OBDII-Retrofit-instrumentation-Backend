@@ -73,7 +73,11 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireClaim("IsAdmin", "True"));
+});
 
 // Swagger (com botão Authorize para testar o token)
 builder.Services.AddEndpointsApiExplorer();
