@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 using ObdII.Models;
 using ObdII.Repositories.Interfaces;
 
@@ -21,9 +22,17 @@ public class UserRepository : IUserRepository
 
     public async Task<UserModel> AddAsync(UserModel user)
     {
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
-        return user;
+        try
+        {
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+            return user;
+        }
+        catch (DbUpdateException ex)
+            when (ex.InnerException is MySqlException { ErrorCode: MySqlErrorCode.DuplicateKeyEntry })
+        {
+            throw new InvalidOperationException("Email já cadastrado.");
+        }
     }
 
     public async Task<UserModel> UpdateAsync(UserModel user)

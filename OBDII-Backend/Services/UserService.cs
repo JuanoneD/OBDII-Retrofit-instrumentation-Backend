@@ -29,14 +29,16 @@ public class UserService : IUserService
 
     public async Task<TokenDto> CreateAccountAsync(CreateUserDto userData)
     {
-        var existing = await _userRepository.GetByEmailAsync(userData.Email);
+        var email = userData.Email.Trim().ToLowerInvariant();
+
+        var existing = await _userRepository.GetByEmailAsync(email);
         if (existing is not null)
             throw new InvalidOperationException("Email já cadastrado.");
 
         var user = new UserModel
         {
             Username = userData.Username,
-            Email = userData.Email
+            Email = email
         };
         user.Password = _passwordHasher.HashPassword(user, userData.Password);
 
@@ -48,7 +50,8 @@ public class UserService : IUserService
 
     public async Task<TokenDto> Login(LoginDto loginData)
     {
-        var user = await _userRepository.GetByEmailAsync(loginData.Email);
+        var email = loginData.Email.Trim().ToLowerInvariant();
+        var user = await _userRepository.GetByEmailAsync(email);
 
         // mesma mensagem para email inexistente e senha errada,
         // para não revelar quais emails existem
