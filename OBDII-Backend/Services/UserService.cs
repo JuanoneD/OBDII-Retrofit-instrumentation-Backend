@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.IdentityModel.Tokens;
 using ObdII.DTOs;
 using ObdII.Models;
@@ -14,17 +13,17 @@ namespace ObdII.Services;
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
-    private readonly IDistributedCache _cache;
+    private readonly IRevokedTokenRepository _revokedTokenRepository;
     private readonly IConfiguration _config;
     private readonly PasswordHasher<UserModel> _passwordHasher = new();
 
     public UserService(
         IUserRepository userRepository,
-        IDistributedCache cache,
+        IRevokedTokenRepository revokedTokenRepository,
         IConfiguration config)
     {
         _userRepository = userRepository;
-        _cache = cache;
+        _revokedTokenRepository = revokedTokenRepository;
         _config = config;
     }
 
@@ -73,19 +72,13 @@ public class UserService : IUserService
             return false;
 
         var jwt = handler.ReadJwtToken(tokenData.Token);
-        var ttl = jwt.ValidTo - DateTime.UtcNow;
 
-        // token já expirado: não precisa revogar
-        if (ttl <= TimeSpan.Zero)
-            return true;
+        // limpa os tokens que já expiraram
+        await _revokedTokenRepository.DeleteExpiredAsync();
 
-        await _cache.SetStringAsync(
-            $"revoked:{jwt.Id}",
-            "1",
-            new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = ttl
-            });
+        // revoga o token atual (se ainda for válido)
+        if (jwt.ValidTo > DateTime.UtcNow)
+            await _revokedTokenRepository.AddAsync(jwt.Id, jwt.ValidTo);
 
         return true;
     }

@@ -7,9 +7,6 @@ using ObdII.Repositories;
 using ObdII.Repositories.Interfaces;
 using ObdII.Services;
 using ObdII.Services.Interfaces;
-using Microsoft.Extensions.Caching.Distributed;
-
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +14,7 @@ builder.Services.AddControllers();
 
 // Repositories e services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IRevokedTokenRepository, RevokedTokenRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
 
 // MySQL
@@ -31,12 +29,6 @@ builder.Services.AddDbContext<ObdIIContext>(options =>
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
             errorNumbersToAdd: null)));
-
-// Redis (tokens revogados)
-builder.Services.AddStackExchangeRedisCache(options =>
-{
-    options.Configuration = builder.Configuration.GetConnectionString("Redis");
-});
 
 // JWT
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -55,7 +47,6 @@ builder.Services
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-            RoleClaimType = "role",
             ClockSkew = TimeSpan.Zero
         };
 
@@ -63,11 +54,11 @@ builder.Services
         {
             OnTokenValidated = async context =>
             {
-                var cache = context.HttpContext.RequestServices
-                    .GetRequiredService<IDistributedCache>();
+                var repo = context.HttpContext.RequestServices
+                    .GetRequiredService<IRevokedTokenRepository>();
                 var jti = context.Principal?.FindFirst("jti")?.Value;
 
-                if (jti is null || await cache.GetStringAsync($"revoked:{jti}") is not null)
+                if (jti is null || await repo.IsRevokedAsync(jti))
                     context.Fail("Token revogado.");
             }
         };
@@ -79,7 +70,7 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("IsAdmin", "True"));
 });
 
-// Swagger (com botão Authorize para testar o token)
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
