@@ -87,8 +87,9 @@ namespace OBDII_Backend.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
-                    b.Property<int>("VehicleId")
-                        .HasColumnType("int");
+                    b.Property<string>("VehicleId")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)");
 
                     b.HasKey("Id");
 
@@ -101,11 +102,9 @@ namespace OBDII_Backend.Migrations
 
             modelBuilder.Entity("ObdII.Models.VehicleModel", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+                    b.Property<string>("Id")
+                        .HasMaxLength(12)
+                        .HasColumnType("varchar(12)");
 
                     b.Property<float>("FuelConsumptionFactor")
                         .HasColumnType("float");
@@ -116,6 +115,9 @@ namespace OBDII_Backend.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("longtext");
+
+                    b.Property<int>("SyncVersion")
+                        .HasColumnType("int");
 
                     b.Property<float>("TankCapacity")
                         .HasColumnType("float");

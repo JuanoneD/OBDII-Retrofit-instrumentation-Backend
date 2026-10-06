@@ -13,10 +13,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-// Repositories e services
+// Repositories and services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IRevokedTokenRepository, RevokedTokenRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IRevokedTokenRepository, RevokedTokenRepository>();
+builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
+builder.Services.AddScoped<IVehicleService, VehicleService>();
 
 // MySQL
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -102,7 +104,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseAuthentication(); // antes do UseAuthorization
+app.UseAuthentication(); // before UseAuthorization
 app.UseAuthorization();
 
 app.MapControllers();
