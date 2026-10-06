@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -6,12 +7,28 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace OBDII_Backend.Migrations
 {
     /// <inheritdoc />
-    public partial class initializateModels : Migration
+    public partial class Initial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterDatabase()
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "RevokedTokens",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Jti = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    ExpiresAt = table.Column<DateTime>(type: "datetime(6)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RevokedTokens", x => x.Id);
+                })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
@@ -38,15 +55,16 @@ namespace OBDII_Backend.Migrations
                 name: "Vehicles",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Id = table.Column<string>(type: "varchar(12)", maxLength: 12, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
                     Name = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     GasLevel = table.Column<float>(type: "float", nullable: false),
                     TankCapacity = table.Column<float>(type: "float", nullable: false),
                     FuelConsumptionFactor = table.Column<float>(type: "float", nullable: false),
                     TripTotalDistance = table.Column<float>(type: "float", nullable: false),
-                    TripConsumption = table.Column<float>(type: "float", nullable: false)
+                    TripConsumption = table.Column<float>(type: "float", nullable: false),
+                    SyncVersion = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -61,7 +79,8 @@ namespace OBDII_Backend.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
                     UserId = table.Column<int>(type: "int", nullable: false),
-                    VehicleId = table.Column<int>(type: "int", nullable: false)
+                    VehicleId = table.Column<string>(type: "varchar(12)", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
@@ -82,6 +101,17 @@ namespace OBDII_Backend.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateIndex(
+                name: "IX_RevokedTokens_ExpiresAt",
+                table: "RevokedTokens",
+                column: "ExpiresAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RevokedTokens_Jti",
+                table: "RevokedTokens",
+                column: "Jti",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_UserVehicleIntersections_UserId",
                 table: "UserVehicleIntersections",
                 column: "UserId");
@@ -95,6 +125,9 @@ namespace OBDII_Backend.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "RevokedTokens");
+
             migrationBuilder.DropTable(
                 name: "UserVehicleIntersections");
 

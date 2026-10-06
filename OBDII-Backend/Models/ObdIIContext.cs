@@ -21,5 +21,13 @@ public class ObdIIContext : DbContext
             entity.HasIndex(t => t.ExpiresAt);
             entity.Property(t => t.Jti).HasMaxLength(64);
         });
+        modelBuilder.Entity<VehicleModel>(entity =>
+        {
+            entity.Property(v => v.Id).HasMaxLength(12);
+        });
+        modelBuilder.Entity<UserModelIntersectionModel>()
+            .HasIndex(i => new { i.UserId, i.VehicleId })
+            .IsUnique();
     }
+    
 }

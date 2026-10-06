@@ -44,7 +44,7 @@ public class UserService : IUserService
 
         await _userRepository.AddAsync(user);
 
-        // criou a conta, já devolve o token (logado automaticamente)
+        // Account created, immediately return the token (automatically logged in)
         return new TokenDto(GenerateToken(user));
     }
 
@@ -53,8 +53,8 @@ public class UserService : IUserService
         var email = loginData.Email.Trim().ToLowerInvariant();
         var user = await _userRepository.GetByEmailAsync(email);
 
-        // mesma mensagem para email inexistente e senha errada,
-        // para não revelar quais emails existem
+        // Same message for non-existent email and wrong password,
+        // to avoid revealing which emails exist
         if (user is null)
             throw new UnauthorizedAccessException("Email ou senha inválidos.");
 
@@ -76,10 +76,10 @@ public class UserService : IUserService
 
         var jwt = handler.ReadJwtToken(tokenData.Token);
 
-        // limpa os tokens que já expiraram
+        // Clean up tokens that have already expired
         await _revokedTokenRepository.DeleteExpiredAsync();
 
-        // revoga o token atual (se ainda for válido)
+        // Revoke the current token (if still valid)
         if (jwt.ValidTo > DateTime.UtcNow)
             await _revokedTokenRepository.AddAsync(jwt.Id, jwt.ValidTo);
 

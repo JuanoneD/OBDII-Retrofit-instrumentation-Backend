@@ -2,8 +2,8 @@ namespace ObdII.Models;
 
 public class VehicleModel
 {
-    public int Id { get; set; }
-    public string Name { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
 
     public float GasLevel { get; set; }
 
@@ -14,4 +14,6 @@ public class VehicleModel
     public float TripTotalDistance { get; set; }
 
     public float TripConsumption { get; set; }
+
+    public int SyncVersion { get; set; }
 }
