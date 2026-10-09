@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     # Bibliotecas externas
     "rest_framework",  # facilita criar a API (endpoints que recebem e devolvem JSON)
+    "rest_framework.authtoken",  # cria e guarda os Tokens de login
     "corsheaders",  # libera o site (Frontend) a chamar o backend pelo navegador
     # Apps do projeto
     "users",  # contas de usuário, login e logout
@@ -107,6 +108,9 @@ else:
 # Tipo padrão dos IDs numéricos das tabelas
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Usa a nossa tabela User (users/models.py) no lugar da tabela de usuário padrão do Django
+AUTH_USER_MODEL = "users.User"
+
 
 # --- Idioma e fuso horário ---------------------------------------------------
 
@@ -130,4 +134,9 @@ REST_FRAMEWORK = {
     # A API responde sempre em JSON
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    # O usuário se identifica enviando o cabeçalho: Authorization: Token <token>
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
+    # Por padrão, todo endpoint exige Token. Os que não exigem
+    # (criar conta, login e o envio da ESP) liberam o acesso na própria view.
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
 }
