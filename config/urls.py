@@ -1,13 +1,14 @@
-"""Rotas principais: tudo da API fica em /api/."""
+"""
+Rotas principais do projeto.
 
-from django.contrib import admin
+Cada app guarda as suas próprias rotas no arquivo urls.py dele:
+- users/urls.py   -> rotas que começam com /user
+- devices/urls.py -> rotas que começam com /devices
+"""
+
 from django.urls import include, path
 
-from telemetry.views import health
-
 urlpatterns = [
-    path("admin/", admin.site.urls),
-    path("api/health/", health, name="health"),
-    path("api/", include("telemetry.urls")),
-    path("api/", include("fuel.urls")),
+    path("", include("users.urls")),
+    path("", include("devices.urls")),
 ]

@@ -1,19 +1,20 @@
-# Ambiente virtual e segredos
+# Ambiente virtual do Python
 .venv/
 venv/
+
+# Senhas e certificados (nunca vão para o GitHub)
 .env
 *.pem
 
-# Python
+# Banco local de testes
+db.sqlite3
+
+# Arquivos gerados pelo Python
 __pycache__/
 *.py[cod]
 
-# Django
-db.sqlite3
-staticfiles/
-
-# Editores / SO
+# Editores e sistema operacional
 .vscode/
 .idea/
-.DS_Store
 Thumbs.db
+.DS_Store
