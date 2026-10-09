@@ -45,14 +45,79 @@ Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usu�
 | Método | Rota                                       | Quem usa | O que faz                                                    | Situação     |
 |--------|--------------------------------------------|----------|--------------------------------------------------------------|--------------|
 | GET    | `/user`                                    | ADM      | Lista todos os usuários                                      | A implementar |
-| POST   | `/user`                                    | Site     | Cria a conta e devolve o Token (login automático)            | A implementar |
-| POST   | `/user/login`                              | Site     | Faz login e devolve o Token                                  | A implementar |
-| POST   | `/user/logout`                             | Site     | Invalida o Token                                             | A implementar |
-| POST   | `/user/addDevice`                          | Site     | Liga uma ESP à conta do usuário                              | A implementar |
+| POST   | `/user`                                    | Site     | Cria a conta e devolve o Token (login automático)            | Pronto       |
+| POST   | `/user/login`                              | Site     | Faz login e devolve o Token                                  | Pronto       |
+| POST   | `/user/logout`                             | Site     | Invalida o Token                                             | Pronto       |
+| POST   | `/user/addDevice`                          | Site     | Liga uma ESP à conta do usuário                              | Pronto       |
 | GET    | `/devices?idDevice=`                       | Site     | Lista as ESPs do usuário (o ADM vê todas)                    | A implementar |
 | POST   | `/devices/<idDevice>`                      | ESP32    | Envia os dados e recebe de volta os valores do banco         | A implementar |
 | POST   | `/devices/resetAndRecalculate?idDevice=`   | Site     | Recalcula o fator de consumo e volta o tanque para cheio     | A implementar |
 | POST   | `/devices/resetTrip?idDevice=`             | Site     | Zera a distância e o consumo da viagem                       | A implementar |
+
+### Identificação da ESP
+
+Cada ESP32 é identificada pelo seu **MAC address**, no formato `AA:BB:CC:DD:EE:FF`.
+O MAC já vem gravado de fábrica na placa e é único, então não precisa ser gerado
+nem configurado. O backend também aceita o MAC em minúsculas ou com outros
+separadores (`aa-bb-cc-dd-ee-ff`, `AABBCCDDEEFF`) e o salva sempre no formato padrão.
+
+### Token (login)
+
+Criar conta e fazer login devolvem um **Token**. Nos endpoints que exigem login,
+o site envia o Token no cabeçalho da requisição:
+
+```
+Authorization: Token <token>
+```
+
+Sem o Token (ou com um Token inválido), a resposta é **401**.
+
+### Códigos de resposta
+
+| Código | Quando                                     |
+|--------|--------------------------------------------|
+| 200    | Deu certo                                  |
+| 400    | Dados inválidos ou faltando                |
+| 401    | Sem Token ou Token inválido                |
+| 403    | Usuário sem permissão (não é ADM)          |
+| 404    | ESP não encontrada                         |
+
+### POST `/user` — criar conta
+
+Envia:
+```json
+{ "name": "Nome do usuário", "password": "senha", "email": "email@exemplo.com" }
+```
+Recebe (200):
+```json
+{ "Token": "9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b" }
+```
+Erro 400 se faltar algum campo ou se o e-mail já tiver conta.
+
+### POST `/user/login` — login
+
+Envia:
+```json
+{ "email": "email@exemplo.com", "password": "senha" }
+```
+Recebe (200):
+```json
+{ "Token": "9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b" }
+```
+Erro 400 se o e-mail ou a senha estiverem errados.
+
+### POST `/user/logout` — logout
+
+Exige o Token. Não envia corpo. Recebe 200, e o Token deixa de funcionar.
+
+### POST `/user/addDevice` — ligar uma ESP à conta
+
+Exige o Token. Envia:
+```json
+{ "idDevice": "AA:BB:CC:DD:EE:FF" }
+```
+Recebe 200. Erro 400 se o MAC for inválido e 404 se a ESP não existir no banco
+(a ESP passa a existir quando envia os dados pela primeira vez).
 
 ## Como rodar no computador
 
@@ -65,6 +130,7 @@ python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
+python manage.py migrate
 python manage.py runserver
 ```
 
@@ -75,10 +141,24 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+python manage.py migrate
 python manage.py runserver
 ```
 
 O backend fica disponível em <http://127.0.0.1:8000>.
+
+O `migrate` cria as tabelas no banco. Ele só precisa ser rodado na primeira vez
+e sempre que surgir uma tabela ou coluna nova no código.
+
+### Criar o administrador (ADM)
+
+Não existe endpoint para criar um ADM. Ele é criado pelo terminal:
+
+```bash
+python manage.py createsuperuser
+```
+
+O comando pede o e-mail, o nome e a senha, e cria o usuário com `isAdm = True`.
 
 ## Configuração (`.env`)
 
