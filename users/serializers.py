@@ -35,9 +35,10 @@ class LoginSerializer(serializers.Serializer):
 
 
 class AddDeviceSerializer(serializers.Serializer):
-    """JSON para ligar uma ESP à conta: {idDevice}."""
+    """JSON para ligar uma ESP à conta: {idDevice, name}."""
 
     idDevice = serializers.CharField()
+    name = serializers.CharField(max_length=100)  # nome da ESP, ex.: "Gol do Rafael"
 
     def validate_idDevice(self, value):
         mac = normalize_mac(value)

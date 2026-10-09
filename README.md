@@ -112,12 +112,12 @@ Exige o Token. Não envia corpo. Recebe 200, e o Token deixa de funcionar.
 
 ### POST `/user/addDevice` — ligar uma ESP à conta
 
-Exige o Token. Envia:
+Exige o Token. Envia o MAC da ESP e o nome que o usuário quer dar a ela:
 ```json
-{ "idDevice": "AA:BB:CC:DD:EE:FF" }
+{ "idDevice": "AA:BB:CC:DD:EE:FF", "name": "Gol do Rafael" }
 ```
-Recebe 200. Erro 400 se o MAC for inválido e 404 se a ESP não existir no banco
-(a ESP passa a existir quando envia os dados pela primeira vez).
+Recebe 200. Erro 400 se o MAC for inválido ou se faltar o `name`, e 404 se a ESP
+não existir no banco (a ESP passa a existir quando envia os dados pela primeira vez).
 
 ## Como rodar no computador
 

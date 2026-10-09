@@ -63,7 +63,7 @@ def logout(request):
 
 @api_view(["POST"])
 def add_device(request):
-    """Liga uma ESP (pelo MAC) à conta do usuário dono do Token."""
+    """Liga uma ESP (pelo MAC) à conta do usuário dono do Token e salva o nome dela."""
     serializer = AddDeviceSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
@@ -71,6 +71,10 @@ def add_device(request):
     device = VehicleData.objects.filter(id=serializer.validated_data["idDevice"]).first()
     if device is None:
         return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Salva o nome escolhido pelo usuário (fica na tabela VehicleData)
+    device.name = serializer.validated_data["name"]
+    device.save(update_fields=["name"])
 
     # get_or_create: se a ESP já estiver ligada a este usuário, não duplica
     UserVehicleData.objects.get_or_create(user=request.user, device=device)
