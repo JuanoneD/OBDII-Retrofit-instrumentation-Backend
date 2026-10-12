@@ -114,7 +114,7 @@ public class VehicleService : IVehicleService
         return ToDto(vehicle);
     }
 
-    public async Task<bool> AddDeviceToUserAsync(int userId, string deviceId)
+    public async Task<bool> AddDeviceToUserAsync(int userId, string deviceId, string? name = null)
     {
         var id = DeviceIdHelper.Normalize(deviceId);
         if (!DeviceIdHelper.IsValid(id))
@@ -124,6 +124,13 @@ public class VehicleService : IVehicleService
         var vehicle = await _vehicleRepository.GetByIdAsync(id);
         if (vehicle is null)
             return false;
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            vehicle.Name = name.Trim();
+            vehicle.SyncVersion++;
+            await _vehicleRepository.UpdateAsync(vehicle);
+        }
 
         await _vehicleRepository.LinkToUserAsync(userId, id);
         return true;

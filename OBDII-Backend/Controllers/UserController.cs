@@ -28,7 +28,7 @@ public class UserController : ControllerBase
                             ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
         try
         {
-            var found = await _vehicleService.AddDeviceToUserAsync(userId, dto.IdDevice);
+            var found = await _vehicleService.AddDeviceToUserAsync(userId, dto.IdDevice, dto.Name);
             return found ? Ok() : NotFound(new { message = "ESP não encontrada" });
         }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }

@@ -17,5 +17,5 @@ public interface IVehicleService
     Task<DeviceDto?> ResetTripAsync(string deviceId, int userId, bool isAdmin);
 
     // false => ESP not found (404). Throws ArgumentException if the MAC is invalid (400).
-    Task<bool> AddDeviceToUserAsync(int userId, string deviceId);
+    Task<bool> AddDeviceToUserAsync(int userId, string deviceId, string? name = null);
 }
