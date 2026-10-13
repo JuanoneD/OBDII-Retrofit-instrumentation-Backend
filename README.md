@@ -49,8 +49,8 @@ Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usu�
 | POST   | `/user/login`                              | Site     | Faz login e devolve o Token                                  | Pronto       |
 | POST   | `/user/logout`                             | Site     | Invalida o Token                                             | Pronto       |
 | POST   | `/user/addDevice`                          | Site     | Liga uma ESP à conta do usuário                              | Pronto       |
-| GET    | `/devices?idDevice=`                       | Site     | Lista as ESPs do usuário (o ADM vê todas)                    | A implementar |
-| POST   | `/devices/<idDevice>`                      | ESP32    | Envia os dados e recebe de volta os valores do banco         | A implementar |
+| GET    | `/devices?idDevice=`                       | Site     | Lista as ESPs do usuário (o ADM vê todas)                    | Pronto       |
+| POST   | `/devices/<idDevice>`                      | ESP32    | Envia os dados e recebe de volta os valores do banco         | Pronto       |
 | POST   | `/devices/resetAndRecalculate?idDevice=`   | Site     | Recalcula o fator de consumo e volta o tanque para cheio     | A implementar |
 | POST   | `/devices/resetTrip?idDevice=`             | Site     | Zera a distância e o consumo da viagem                       | A implementar |
 
@@ -118,6 +118,58 @@ Exige o Token. Envia o MAC da ESP e o nome que o usuário quer dar a ela:
 ```
 Recebe 200. Erro 400 se o MAC for inválido ou se faltar o `name`, e 404 se a ESP
 não existir no banco (a ESP passa a existir quando envia os dados pela primeira vez).
+
+### GET `/devices?idDevice=` — listar as ESPs
+
+Exige o Token. O usuário comum recebe só as ESPs ligadas à conta dele; o ADM
+recebe todas. Com `?idDevice=<MAC>`, a resposta traz só aquela ESP.
+
+Recebe (200):
+```json
+{
+  "device": [
+    {
+      "idDevice": "AA:BB:CC:DD:EE:FF",
+      "name": "Gol do Rafael",
+      "gasolineLevel": 38.2,
+      "tankCapacity": 55.0,
+      "fuelConsumptionFactor": 0.008,
+      "totalDistance": 120.3,
+      "tripConsumption": 9.8
+    }
+  ],
+  "totalDevice": 1
+}
+```
+Erro 404 se o `idDevice` informado não estiver entre as ESPs que o usuário pode ver.
+
+### POST `/devices/<idDevice>` — envio da ESP32
+
+Não exige Token: a ESP se identifica pelo MAC no endereço. Ela envia os 5 dados
+de combustível e o seu `sync_version`:
+
+```json
+{
+  "gasolineLevel": 38.2,
+  "tankCapacity": 55,
+  "fuelConsumptionFactor": 0.008,
+  "totalDistance": 120.3,
+  "tripConsumption": 9.8,
+  "sync_version": 0
+}
+```
+
+Recebe (200) os valores que estão no banco, no mesmo formato.
+Erro 400 se faltar algum campo ou se o MAC for inválido.
+
+**Como funciona a sincronização:**
+
+- Se a ESP ainda não existe no banco, ela é cadastrada com os dados enviados.
+- Se o `sync_version` enviado é **igual** ao do banco, o banco salva os dados da ESP.
+- Se é **diferente** (porque o site alterou os dados, por exemplo num reset),
+  o banco ignora os dados da ESP.
+- Nos dois casos, a resposta traz os valores do banco. Se o `sync_version` da
+  resposta for diferente do dela, a ESP grava esses valores na memória dela.
 
 ## Como rodar no computador
 
