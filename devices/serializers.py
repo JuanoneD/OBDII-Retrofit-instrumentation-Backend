@@ -29,6 +29,17 @@ class DeviceSyncSerializer(serializers.ModelSerializer):
         extra_kwargs = {field: {"required": True} for field in fields}
 
 
+class RecalculateSerializer(serializers.Serializer):
+    """JSON do recálculo: {refueledGas} = litros colocados para encher o tanque."""
+
+    refueledGas = serializers.FloatField()
+
+    def validate_refueledGas(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("refueledGas deve ser maior que zero.")
+        return value
+
+
 class DeviceSerializer(serializers.ModelSerializer):
     """Informações de uma ESP mostradas no site (GET /devices)."""
 

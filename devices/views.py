@@ -5,8 +5,10 @@ Uma view é a função que executa um endpoint: recebe a requisição, faz o
 trabalho e devolve a resposta.
 
 Endpoints deste app:
-- GET  /devices              lista as ESPs do usuário (o ADM vê todas)
-- POST /devices/<idDevice>   a ESP32 envia os seus dados
+- GET  /devices                                  lista as ESPs do usuário (o ADM vê todas)
+- POST /devices/<idDevice>                       a ESP32 envia os seus dados
+- POST /devices/resetAndRecalculate?idDevice=    recalcula o fator e enche o tanque
+- POST /devices/resetTrip?idDevice=              zera a distância e o consumo da viagem
 """
 
 from django.db import transaction
@@ -16,7 +18,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import VehicleData, normalize_mac
-from .serializers import FUEL_FIELDS, DeviceSerializer, DeviceSyncSerializer
+from .serializers import FUEL_FIELDS, DeviceSerializer, DeviceSyncSerializer, RecalculateSerializer
 
 
 @api_view(["GET"])
@@ -87,3 +89,74 @@ def sync_device(request, idDevice):
         # Versão diferente: não salva nada (os dados do banco é que valem)
 
     return Response(DeviceSyncSerializer(device).data)
+
+
+def get_own_device(request):
+    """
+    Busca a ESP do ?idDevice= entre as ESPs ligadas à conta do usuário.
+
+    Só o dono pode alterar a ESP: se ela não existir ou não estiver ligada
+    à conta dele, devolve None (e o endpoint responde 404).
+    select_for_update trava a ESP até o fim da alteração, para que um envio
+    da ESP feito ao mesmo tempo não desfaça o reset.
+    """
+    mac = normalize_mac(request.query_params.get("idDevice", ""))
+    return (
+        VehicleData.objects.select_for_update()
+        .filter(id=mac, uservehicledata__user=request.user)
+        .first()
+    )
+
+
+@api_view(["POST"])
+def reset_and_recalculate(request):
+    """
+    O usuário encheu o tanque e informa quantos litros colocou (refueledGas).
+
+    1. Litros gastos no sistema = tankCapacity - gasolineLevel
+       (quanto o sistema acha que foi consumido até agora).
+    2. Novo fator = fator antigo * (refueledGas / litros gastos no sistema).
+       Se foram colocados mais litros do que o sistema calculou, o fator
+       aumenta; se foram menos, diminui. Assim o cálculo fica mais preciso.
+    3. O tanque volta para cheio (gasolineLevel = tankCapacity).
+    4. sync_version aumenta, para a ESP receber os valores novos.
+    """
+    serializer = RecalculateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    refueled_gas = serializer.validated_data["refueledGas"]
+
+    with transaction.atomic():
+        device = get_own_device(request)
+        if device is None:
+            return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        liters_spent = device.tankCapacity - device.gasolineLevel
+        if liters_spent <= 0:
+            # Tanque cheio: o sistema não registrou consumo, então não há como recalcular
+            return Response(
+                {"detail": "O tanque já está cheio no sistema; não há consumo para recalcular o fator."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        device.fuelConsumptionFactor = device.fuelConsumptionFactor * (refueled_gas / liters_spent)
+        device.gasolineLevel = device.tankCapacity
+        device.sync_version += 1
+        device.save()
+
+    return Response()
+
+
+@api_view(["POST"])
+def reset_trip(request):
+    """Zera a distância e o consumo da viagem (totalDistance e tripConsumption)."""
+    with transaction.atomic():
+        device = get_own_device(request)
+        if device is None:
+            return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        device.totalDistance = 0
+        device.tripConsumption = 0
+        device.sync_version += 1  # para a ESP receber os valores zerados
+        device.save()
+
+    return Response()
