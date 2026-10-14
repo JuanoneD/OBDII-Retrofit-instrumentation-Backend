@@ -173,7 +173,7 @@ Erro 400 se faltar algum campo ou se o MAC for inválido.
 
 ### POST `/devices/resetAndRecalculate?idDevice=` — recalcular o fator
 
-Exige o Token, e só o dono da ESP pode usar. Depois de encher o tanque, o usuário
+Exige o Token. Pode ser usado pelo dono da ESP ou por um ADM. Depois de encher o tanque, o usuário
 informa quantos litros colocou:
 
 ```json
@@ -192,18 +192,18 @@ O `tripConsumption` não é zerado aqui: ele serve para o km/L da viagem.
 
 Recebe 200 (sem corpo). Erro 400 se faltar o `refueledGas`, se ele não for maior
 que zero ou se o tanque já estiver cheio no sistema (não há consumo para recalcular),
-e 404 se a ESP não estiver ligada à conta do usuário.
+e 404 se a ESP não existir ou não estiver ligada à conta do usuário (para o ADM, só se não existir).
 
 **Exemplo:** tanque de 55 L com 25 L no sistema (o sistema acha que gastou 30 L).
 O usuário colocou 33 L para encher. Novo fator = 0.008 × 33 / 30 = 0.0088.
 
 ### POST `/devices/resetTrip?idDevice=` — zerar a viagem
 
-Exige o Token, e só o dono da ESP pode usar. Não envia corpo.
+Exige o Token. Pode ser usado pelo dono da ESP ou por um ADM. Não envia corpo.
 Zera o `totalDistance` e o `tripConsumption` e aumenta o `sync_version`, para a
 ESP receber os valores zerados.
 
-Recebe 200 (sem corpo). Erro 404 se a ESP não estiver ligada à conta do usuário.
+Recebe 200 (sem corpo). Erro 404 se a ESP não existir ou não estiver ligada à conta do usuário (para o ADM, só se não existir).
 
 ## Como rodar no computador
 

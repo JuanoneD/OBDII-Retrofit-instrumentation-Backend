@@ -91,21 +91,22 @@ def sync_device(request, idDevice):
     return Response(DeviceSyncSerializer(device).data)
 
 
-def get_own_device(request):
+def get_device_to_change(request):
     """
-    Busca a ESP do ?idDevice= entre as ESPs ligadas à conta do usuário.
+    Busca a ESP do ?idDevice= que o usuário pode alterar:
+    - usuário comum: só as ESPs ligadas à conta dele;
+    - ADM: qualquer ESP.
 
-    Só o dono pode alterar a ESP: se ela não existir ou não estiver ligada
-    à conta dele, devolve None (e o endpoint responde 404).
+    Se a ESP não existir ou o usuário não puder alterá-la, devolve None
+    (e o endpoint responde 404).
     select_for_update trava a ESP até o fim da alteração, para que um envio
     da ESP feito ao mesmo tempo não desfaça o reset.
     """
     mac = normalize_mac(request.query_params.get("idDevice", ""))
-    return (
-        VehicleData.objects.select_for_update()
-        .filter(id=mac, uservehicledata__user=request.user)
-        .first()
-    )
+    devices = VehicleData.objects.select_for_update().filter(id=mac)
+    if not request.user.isAdm:
+        devices = devices.filter(uservehicledata__user=request.user)
+    return devices.first()
 
 
 @api_view(["POST"])
@@ -126,7 +127,7 @@ def reset_and_recalculate(request):
     refueled_gas = serializer.validated_data["refueledGas"]
 
     with transaction.atomic():
-        device = get_own_device(request)
+        device = get_device_to_change(request)
         if device is None:
             return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -150,7 +151,7 @@ def reset_and_recalculate(request):
 def reset_trip(request):
     """Zera a distância e o consumo da viagem (totalDistance e tripConsumption)."""
     with transaction.atomic():
-        device = get_own_device(request)
+        device = get_device_to_change(request)
         if device is None:
             return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
