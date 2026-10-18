@@ -93,9 +93,10 @@ namespace OBDII_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
-
                     b.HasIndex("VehicleId");
+
+                    b.HasIndex("UserId", "VehicleId")
+                        .IsUnique();
 
                     b.ToTable("UserVehicleIntersections");
                 });

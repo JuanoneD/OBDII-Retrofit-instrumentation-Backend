@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace OBDII_Backend.Migrations
 {
     /// <inheritdoc />
-    public partial class Initial : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -112,9 +112,10 @@ namespace OBDII_Backend.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_UserVehicleIntersections_UserId",
+                name: "IX_UserVehicleIntersections_UserId_VehicleId",
                 table: "UserVehicleIntersections",
-                column: "UserId");
+                columns: new[] { "UserId", "VehicleId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserVehicleIntersections_VehicleId",

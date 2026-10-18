@@ -12,8 +12,8 @@ using ObdII.Models;
 namespace OBDII_Backend.Migrations
 {
     [DbContext(typeof(ObdIIContext))]
-    [Migration("20261006003504_Initial")]
-    partial class Initial
+    [Migration("20261018004419_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -96,9 +96,10 @@ namespace OBDII_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
-
                     b.HasIndex("VehicleId");
+
+                    b.HasIndex("UserId", "VehicleId")
+                        .IsUnique();
 
                     b.ToTable("UserVehicleIntersections");
                 });

@@ -91,36 +91,18 @@ public class VehicleService : IVehicleService
         // If the system registered little/no consumption, keep the current factor:
         // a tiny denominator would produce an extreme ratio that permanently corrupts
         // the factor.
-        //
-        // IMPORTANT: this correction is multiplicative on top of whatever factor is
-        // already stored. That means two "plausible" corrections in the same direction
-        // can still compound into an extreme result (e.g. factor already low from a
-        // previous reset, then another reset applies a small ratio again and it
-        // collapses further). To guard against this we cap how much the factor is
-        // allowed to change in a single reset (ratio-based, scale-invariant). This lets
-        // the factor gradually converge toward the correct value over multiple resets,
-        // instead of jumping to an extreme in one step.
-        //
-        // Note: we intentionally do NOT clamp to a fixed absolute min/max range here.
-        // The valid scale of FuelConsumptionFactor depends entirely on the ESP's
-        // calibration/units and can legitimately be e.g. 1e-6 for one device and 1e2
-        // for another, so a fixed absolute bound would silently force values toward
-        // the wrong magnitude for devices outside the assumed range.
         const double MinLitersSpentThreshold = 0.05; // liters, ignore noise/negligible consumption
-        const double MaxStepChangeRatio = 2.0; // factor can at most double/halve per reset
 
         var litersSpentBySystem = vehicle.TankCapacity - vehicle.GasLevel;
         if (litersSpentBySystem >= MinLitersSpentThreshold)
         {
-            var rawRatio = request.RefueledGas / litersSpentBySystem;
-            var clampedRatio = Math.Clamp(rawRatio, 1.0 / MaxStepChangeRatio, MaxStepChangeRatio);
-            var newFactor = vehicle.FuelConsumptionFactor * clampedRatio;
+            var newFactor = vehicle.FuelConsumptionFactor * (request.RefueledGas / litersSpentBySystem);
 
-            // Only guard against values that are structurally invalid (should never
-            // happen given the clamp above, but protects against NaN/zero/negative
-            // from unexpected edge cases), not against an assumed magnitude.
-            if (newFactor > 0 && !double.IsNaN(newFactor) && !double.IsInfinity(newFactor))
-                vehicle.FuelConsumptionFactor = (float)newFactor;
+            // Only guard against values that are structurally invalid, not against an
+            // assumed magnitude (valid factor scale depends entirely on the ESP's
+            // calibration/units, e.g. it can legitimately be ~1e-9 for one device).
+            if (newFactor > 0 && !float.IsNaN(newFactor) && !float.IsInfinity(newFactor))
+                vehicle.FuelConsumptionFactor = newFactor;
         }
 
         vehicle.GasLevel = vehicle.TankCapacity;
