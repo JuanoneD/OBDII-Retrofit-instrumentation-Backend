@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     # Apps do projeto
     "users",  # contas de usuário, login e logout
     "devices",  # dados das ESP32 e vínculo entre usuário e ESP
+    "dtcs",  # códigos de erro (DTCs) lidos do carro e a base de erros
 ]
 
 MIDDLEWARE = [
