@@ -20,13 +20,17 @@ class DeviceSyncSerializer(serializers.ModelSerializer):
     os 5 dados de combustível + sync_version.
 
     É usado tanto para validar o que a ESP envia quanto para montar a resposta.
+    A resposta também traz o diagnoseMode, para a ESP saber se deve ler
+    os códigos de erro (DTCs) do carro. A ESP não envia esse campo.
     """
 
     class Meta:
         model = VehicleData
-        fields = FUEL_FIELDS + ["sync_version"]
-        # Todos os campos são obrigatórios no envio da ESP
-        extra_kwargs = {field: {"required": True} for field in fields}
+        fields = FUEL_FIELDS + ["sync_version", "diagnoseMode"]
+        # Os campos de combustível e o sync_version são obrigatórios no envio da ESP
+        extra_kwargs = {field: {"required": True} for field in FUEL_FIELDS + ["sync_version"]}
+        # O diagnoseMode só aparece na resposta (quem altera é o site)
+        read_only_fields = ["diagnoseMode"]
 
 
 class RecalculateSerializer(serializers.Serializer):
@@ -40,6 +44,32 @@ class RecalculateSerializer(serializers.Serializer):
         return value
 
 
+class UpdateDeviceSerializer(serializers.Serializer):
+    """
+    JSON para o site alterar a ESP: {name, tankCapacity}.
+    Os dois são opcionais, mas é preciso enviar pelo menos um.
+    """
+
+    name = serializers.CharField(max_length=100, required=False)
+    tankCapacity = serializers.FloatField(required=False)
+
+    def validate_tankCapacity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("tankCapacity deve ser maior que zero.")
+        return value
+
+    def validate(self, data):
+        if not data:
+            raise serializers.ValidationError("Envie pelo menos um campo: name ou tankCapacity.")
+        return data
+
+
+class OperationModeSerializer(serializers.Serializer):
+    """JSON para ligar ou desligar o modo diagnóstico: {diagnoseMode: true/false}."""
+
+    diagnoseMode = serializers.BooleanField()
+
+
 class DeviceSerializer(serializers.ModelSerializer):
     """Informações de uma ESP mostradas no site (GET /devices)."""
 
@@ -47,4 +77,4 @@ class DeviceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VehicleData
-        fields = ["idDevice", "name"] + FUEL_FIELDS
+        fields = ["idDevice", "name"] + FUEL_FIELDS + ["diagnoseMode"]
