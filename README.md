@@ -1,10 +1,10 @@
-# OBDII Retrofit Instrumentation — Backend (v1.0)
+# OBDII Retrofit Instrumentation — Backend (v1.1)
 
 API em Python/Django que recebe os dados de combustível enviados pela ESP32,
-guarda no banco MySQL da AWS e os entrega para o site (Frontend em React na Vercel).
+guarda num banco MySQL/MariaDB e os entrega para o site (Frontend em React na Vercel).
 
 ```
-ESP32 ──(HTTP/JSON)──► Backend (Django, AWS) ──► MySQL (AWS RDS)
+ESP32 ──(HTTP/JSON)──► Backend (Django) ──► MySQL / MariaDB
                               ▲
 Site (React, Vercel) ─────────┘
 ```
@@ -12,6 +12,10 @@ Site (React, Vercel) ─────────┘
 Na versão 1.0, a ESP32 envia os dados apenas com o carro desligado. Por isso o
 backend trabalha só com os dados persistentes de combustível, além das contas
 de usuário.
+
+A versão 1.1 acrescenta o **modo diagnóstico**: o usuário liga o modo pelo site
+e a ESP passa a ler os códigos de erro (DTCs) do carro. A versão 1.0 continua
+disponível na release `v1.0` do GitHub.
 
 ## Estrutura do projeto
 
@@ -36,7 +40,7 @@ Dentro de cada app:
 |----------------------|-------------------------------------------------------------------------------------------------------------|
 | **User**             | ID_USER, name, password, email, isAdm                                                                       |
 | **User-VehicleData** | ID, ID_ESP, ID_USER (liga um usuário a uma ESP)                                                             |
-| **VehicleData**      | ID_ESP (MAC), name, gasolineLevel, tankCapacity, fuelConsumptionFactor, totalDistance, tripConsumption, sync_version |
+| **VehicleData**      | ID_ESP (MAC), name, gasolineLevel, tankCapacity, fuelConsumptionFactor, totalDistance, tripConsumption, sync_version, diagnoseMode |
 
 Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usuário.
 
@@ -50,9 +54,11 @@ Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usu�
 | POST   | `/user/logout`                             | Site     | Invalida o Token                                             | Pronto       |
 | POST   | `/user/addDevice`                          | Site     | Liga uma ESP à conta do usuário                              | Pronto       |
 | GET    | `/devices?idDevice=`                       | Site     | Lista as ESPs do usuário (o ADM vê todas)                    | Pronto       |
+| PUT    | `/devices?idDevice=`                       | Site     | Altera o nome e/ou a capacidade do tanque da ESP             | Pronto (v1.1) |
 | POST   | `/devices/<idDevice>`                      | ESP32    | Envia os dados e recebe de volta os valores do banco         | Pronto       |
 | POST   | `/devices/resetAndRecalculate?idDevice=`   | Site     | Recalcula o fator de consumo e volta o tanque para cheio     | Pronto       |
 | POST   | `/devices/resetTrip?idDevice=`             | Site     | Zera a distância e o consumo da viagem                       | Pronto       |
+| POST   | `/devices/setOperationMode?idDevice=`      | Site     | Liga ou desliga o modo diagnóstico                           | Pronto (v1.1) |
 
 ### Identificação da ESP
 
@@ -135,7 +141,8 @@ Recebe (200):
       "tankCapacity": 55.0,
       "fuelConsumptionFactor": 0.008,
       "totalDistance": 120.3,
-      "tripConsumption": 9.8
+      "tripConsumption": 9.8,
+      "diagnoseMode": false
     }
   ],
   "totalDevice": 1
@@ -159,7 +166,9 @@ de combustível e o seu `sync_version`:
 }
 ```
 
-Recebe (200) os valores que estão no banco, no mesmo formato.
+Recebe (200) os valores que estão no banco, no mesmo formato, e mais o
+`diagnoseMode` (`true` ou `false`). Quando vier `true`, a ESP lê os códigos de
+erro (DTCs) do carro. A ESP não envia o `diagnoseMode`: quem o altera é o site.
 Erro 400 se faltar algum campo ou se o MAC for inválido.
 
 **Como funciona a sincronização:**
@@ -204,6 +213,37 @@ Zera o `totalDistance` e o `tripConsumption` e aumenta o `sync_version`, para a
 ESP receber os valores zerados.
 
 Recebe 200 (sem corpo). Erro 404 se a ESP não existir ou não estiver ligada à conta do usuário (para o ADM, só se não existir).
+
+### PUT `/devices?idDevice=` — alterar a ESP
+
+Exige o Token. Pode ser usado pelo dono da ESP ou por um ADM. Envia o nome e/ou a
+capacidade do tanque (pelo menos um dos dois):
+
+```json
+{ "name": "Gol do Rafael", "tankCapacity": 50 }
+```
+
+- Se a `tankCapacity` mudar, o `sync_version` aumenta, para a ESP receber o valor novo.
+- Se a gasolina passar da nova capacidade, ela é ajustada para a capacidade.
+
+Recebe 200 (sem corpo). Erro 400 se não enviar nenhum campo ou se a `tankCapacity`
+não for maior que zero, e 404 se a ESP não existir ou não estiver ligada à conta
+do usuário (para o ADM, só se não existir).
+
+### POST `/devices/setOperationMode?idDevice=` — modo diagnóstico
+
+Exige o Token. Pode ser usado pelo dono da ESP ou por um ADM. Liga ou desliga o
+modo diagnóstico:
+
+```json
+{ "diagnoseMode": true }
+```
+
+A ESP fica sabendo na resposta do próximo envio dela. O modo só é desligado pelo
+site (`{ "diagnoseMode": false }`).
+
+Recebe 200 (sem corpo). Erro 400 se faltar o `diagnoseMode` e 404 se a ESP não
+existir ou não estiver ligada à conta do usuário (para o ADM, só se não existir).
 
 ## Como rodar no computador
 
@@ -257,12 +297,12 @@ guarda senhas. O modelo está em `.env.example`.
 | `DJANGO_DEBUG`         | `True` no computador, `False` no servidor                  |
 | `DJANGO_ALLOWED_HOSTS` | Endereços pelos quais o backend pode ser acessado          |
 | `CORS_ALLOWED_ORIGINS` | Endereços do site autorizados a chamar o backend (Vercel)  |
-| `DB_HOST`              | Endereço do MySQL da AWS. **Vazio = usa o banco local (SQLite)** |
+| `DB_HOST`              | Endereço do MySQL/MariaDB. **Vazio = usa o banco local (SQLite)** |
 | `DB_PORT`              | Porta do MySQL (3306)                                      |
 | `DB_NAME`              | Nome do banco (`obdii`)                                    |
 | `DB_USER`              | Usuário do banco                                           |
 | `DB_PASSWORD`          | Senha do banco                                             |
-| `DB_SSL_CA`            | Arquivo do certificado da AWS (`global-bundle.pem`)        |
+| `DB_SSL_CA`            | Certificado SSL do banco (ex.: `global-bundle.pem` da AWS). **Vazio = conecta sem certificado** |
 
 ### Usando o banco da AWS
 

@@ -66,7 +66,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 
 # --- Banco de dados ----------------------------------------------------------
-# Se DB_HOST estiver preenchido no .env, usa o MySQL da AWS.
+# Se DB_HOST estiver preenchido no .env, usa o MySQL/MariaDB do servidor.
 # Se estiver vazio, usa o SQLite: um arquivo local (db.sqlite3) para testar
 # no computador sem precisar de internet.
 
@@ -79,6 +79,18 @@ if os.getenv("DB_HOST"):
     pymysql.version_info = (2, 2, 1, "final", 0)
     pymysql.install_as_MySQLdb()
 
+    db_options = {
+        "charset": "utf8mb4",
+        # Modo estrito: o MySQL recusa dados inválidos em vez de
+        # cortá-los ou ajustá-los sem avisar
+        "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+    }
+    # Certificado SSL (ex.: global-bundle.pem da AWS): deixa a conexão com o
+    # banco criptografada. Se DB_SSL_CA estiver vazio, conecta sem certificado
+    # (caso de um banco no próprio servidor, que não usa SSL).
+    if os.getenv("DB_SSL_CA"):
+        db_options["ssl"] = {"ca": str(BASE_DIR / os.getenv("DB_SSL_CA"))}
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
@@ -87,14 +99,7 @@ if os.getenv("DB_HOST"):
             "NAME": os.getenv("DB_NAME"),
             "USER": os.getenv("DB_USER"),
             "PASSWORD": os.getenv("DB_PASSWORD"),
-            "OPTIONS": {
-                "charset": "utf8mb4",
-                # Modo estrito: o MySQL recusa dados inválidos em vez de
-                # cortá-los ou ajustá-los sem avisar
-                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-                # Certificado da AWS: deixa a conexão com o banco criptografada
-                "ssl": {"ca": str(BASE_DIR / os.getenv("DB_SSL_CA", "global-bundle.pem"))},
-            },
+            "OPTIONS": db_options,
         }
     }
 else:

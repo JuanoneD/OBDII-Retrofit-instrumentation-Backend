@@ -47,6 +47,10 @@ class VehicleData(models.Model):
     # Aumenta quando o site altera os dados (reset/recálculo).
     sync_version = models.IntegerField(default=0)
 
+    # Modo diagnóstico: o usuário liga pelo site. Enquanto estiver ligado,
+    # a ESP lê os códigos de erro (DTCs) do carro e os envia ao backend.
+    diagnoseMode = models.BooleanField(default=False)
+
     class Meta:
         db_table = "VehicleData"
 

@@ -6,9 +6,11 @@ trabalho e devolve a resposta.
 
 Endpoints deste app:
 - GET  /devices                                  lista as ESPs do usuário (o ADM vê todas)
+- PUT  /devices?idDevice=                        altera o nome e/ou a capacidade do tanque
 - POST /devices/<idDevice>                       a ESP32 envia os seus dados
 - POST /devices/resetAndRecalculate?idDevice=    recalcula o fator e enche o tanque
 - POST /devices/resetTrip?idDevice=              zera a distância e o consumo da viagem
+- POST /devices/setOperationMode?idDevice=       liga ou desliga o modo diagnóstico
 """
 
 from django.db import transaction
@@ -18,10 +20,28 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import VehicleData, normalize_mac
-from .serializers import FUEL_FIELDS, DeviceSerializer, DeviceSyncSerializer, RecalculateSerializer
+from .serializers import (
+    FUEL_FIELDS,
+    DeviceSerializer,
+    DeviceSyncSerializer,
+    OperationModeSerializer,
+    RecalculateSerializer,
+    UpdateDeviceSerializer,
+)
 
 
-@api_view(["GET"])
+@api_view(["GET", "PUT"])
+def devices(request):
+    """
+    O mesmo endereço (/devices) atende dois métodos:
+    - GET: lista as ESPs;
+    - PUT: altera uma ESP.
+    """
+    if request.method == "PUT":
+        return update_device(request)
+    return list_devices(request)
+
+
 def list_devices(request):
     """
     Lista as ESPs que o usuário pode ver:
@@ -107,6 +127,57 @@ def get_device_to_change(request):
     if not request.user.isAdm:
         devices = devices.filter(uservehicledata__user=request.user)
     return devices.first()
+
+
+def update_device(request):
+    """
+    O site altera as informações da ESP: nome e/ou capacidade do tanque.
+
+    Se a capacidade do tanque mudar, o sync_version aumenta, para a ESP
+    receber o valor novo. Se a gasolina passar da nova capacidade, ela é
+    ajustada para a capacidade (o tanque não pode ter mais do que cabe).
+    """
+    serializer = UpdateDeviceSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    with transaction.atomic():
+        device = get_device_to_change(request)
+        if device is None:
+            return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        if "name" in data:
+            device.name = data["name"]
+
+        if "tankCapacity" in data and data["tankCapacity"] != device.tankCapacity:
+            device.tankCapacity = data["tankCapacity"]
+            device.gasolineLevel = min(device.gasolineLevel, device.tankCapacity)
+            device.sync_version += 1  # a ESP precisa receber a capacidade nova
+
+        device.save()
+
+    return Response()
+
+
+@api_view(["POST"])
+def set_operation_mode(request):
+    """
+    Liga ou desliga o modo diagnóstico da ESP: {diagnoseMode: true/false}.
+
+    A ESP fica sabendo na resposta do próximo envio dela (POST /devices/<idDevice>).
+    """
+    serializer = OperationModeSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    with transaction.atomic():
+        device = get_device_to_change(request)
+        if device is None:
+            return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        device.diagnoseMode = serializer.validated_data["diagnoseMode"]
+        device.save()
+
+    return Response()
 
 
 @api_view(["POST"])
