@@ -24,6 +24,7 @@ disponível na release `v1.0` do GitHub.
 | `config/`  | Configurações do projeto: banco de dados, CORS, rotas principais  |
 | `users/`   | Contas de usuário, login e logout                                 |
 | `devices/` | Dados das ESP32 e vínculo entre usuário e ESP                     |
+| `dtcs/`    | Códigos de erro (DTCs) lidos do carro e a base de erros           |
 
 Dentro de cada app:
 
@@ -42,6 +43,9 @@ Dentro de cada app:
 | **User-VehicleData** | ID, ID_ESP, ID_USER (liga um usuário a uma ESP)                                                             |
 | **VehicleData**      | ID_ESP (MAC), name, gasolineLevel, tankCapacity, fuelConsumptionFactor, totalDistance, tripConsumption, sync_version, diagnoseMode |
 
+| **DTC**              | ID, ID_ESP, code, receivedAt (os códigos de erro que a ESP leu do carro)                                    |
+| **DTCDescription**   | code, title, description (base de erros, em português)                                                     |
+
 Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usuário.
 
 ## Endpoints
@@ -59,6 +63,8 @@ Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usu�
 | POST   | `/devices/resetAndRecalculate?idDevice=`   | Site     | Recalcula o fator de consumo e volta o tanque para cheio     | Pronto       |
 | POST   | `/devices/resetTrip?idDevice=`             | Site     | Zera a distância e o consumo da viagem                       | Pronto       |
 | POST   | `/devices/setOperationMode?idDevice=`      | Site     | Liga ou desliga o modo diagnóstico                           | Pronto (v1.1) |
+| POST   | `/devices/sendDTCs?idDevice=`              | ESP32    | Envia os códigos de erro lidos do carro                      | Pronto (v1.1) |
+| GET    | `/devices/getDTCs?idDevice=`               | Site     | Lista os códigos de erro, com título e descrição             | Pronto (v1.1) |
 
 ### Identificação da ESP
 
@@ -244,6 +250,62 @@ site (`{ "diagnoseMode": false }`).
 
 Recebe 200 (sem corpo). Erro 400 se faltar o `diagnoseMode` e 404 se a ESP não
 existir ou não estiver ligada à conta do usuário (para o ADM, só se não existir).
+
+### Modo diagnóstico: como funciona
+
+1. O usuário liga o modo pelo site (`POST /devices/setOperationMode`).
+2. A ESP recebe `diagnoseMode: true` na resposta do envio de dados dela.
+3. A ESP lê os códigos de erro (DTCs) do carro e os envia (`POST /devices/sendDTCs`).
+4. O site mostra os erros, com título e descrição (`GET /devices/getDTCs`).
+
+### POST `/devices/sendDTCs?idDevice=` — envio dos DTCs pela ESP32
+
+Não exige Token: a ESP se identifica pelo MAC no `idDevice`. Ela envia a lista de
+códigos de erro que leu do carro:
+
+```json
+{ "dtcs": ["P0301", "P0420"] }
+```
+
+- A lista nova **substitui** a anterior: o carro sempre informa todos os erros
+  ativos, então um erro que não vier mais já foi resolvido.
+- A lista pode ser vazia (`[]`): o carro não tem nenhum erro ativo.
+- Os códigos são padronizados em maiúsculas, e os repetidos são ignorados.
+
+Recebe 200 (sem corpo). Erro 400 se faltar a lista, se algum código não estiver no
+formato (letra P, C, B ou U + 4 caracteres, ex.: `P0301`) ou se o MAC for inválido,
+e 404 se a ESP não existir no banco.
+
+### GET `/devices/getDTCs?idDevice=` — erros para o site
+
+Exige o Token. Pode ser usado pelo dono da ESP ou por um ADM.
+
+Recebe (200):
+```json
+{
+  "dtcs": [
+    {
+      "code": "P0301",
+      "title": "Falha de ignição no cilindro 1",
+      "description": "A combustão está falhando no cilindro 1. Verificar vela, bobina/cabo e bico injetor desse cilindro.",
+      "receivedAt": "2026-10-31T10:00:00-03:00"
+    }
+  ],
+  "totalDtcs": 1
+}
+```
+
+Se um código não estiver na base de erros, ele vem com o título
+`"Código não encontrado na base"` e a descrição vazia.
+Erro 404 se a ESP não existir ou não estiver ligada à conta do usuário
+(para o ADM, só se não existir).
+
+### Base de erros
+
+A base fica em `dtcs/dtc_base.py`: códigos genéricos de OBD-II (padrão para
+todos os carros), com título e descrição em português. Ela é carregada no banco
+automaticamente pelo `migrate`. Para acrescentar códigos, inclua novos itens na
+lista e crie uma nova migration de dados que carregue a lista de novo.
 
 ## Como rodar no computador
 
