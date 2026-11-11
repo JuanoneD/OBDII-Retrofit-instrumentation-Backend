@@ -8,7 +8,7 @@ ou for inválido, o endpoint responde 400 dizendo qual campo está errado.
 
 from rest_framework import serializers
 
-from .models import normalize_dtc
+from .models import DetectedError, normalize_dtc
 
 
 class SendDTCsSerializer(serializers.Serializer):
@@ -31,3 +31,18 @@ class SendDTCsSerializer(serializers.Serializer):
             if code not in codes:  # ignora códigos repetidos na mesma lista
                 codes.append(code)
         return codes
+
+
+class AddDetectErrorSerializer(serializers.Serializer):
+    """JSON que a ESP envia ao detectar uma falha: {title, description}."""
+
+    title = serializers.CharField(max_length=200)
+    description = serializers.CharField()
+
+
+class DetectedErrorSerializer(serializers.ModelSerializer):
+    """Uma falha detectada, como o site recebe (GET /devices/getDetectErrors)."""
+
+    class Meta:
+        model = DetectedError
+        fields = ["title", "description", "detectedAt"]

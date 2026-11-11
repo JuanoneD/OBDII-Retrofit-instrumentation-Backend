@@ -29,6 +29,9 @@ from .serializers import (
     UpdateDeviceSerializer,
 )
 
+# O fator só é recalculado se o sistema registrou mais que isto de consumo (litros)
+MIN_LITERS_TO_RECALCULATE = 1.0
+
 
 @api_view(["GET", "PUT"])
 def devices(request):
@@ -187,10 +190,14 @@ def reset_and_recalculate(request):
 
     1. Litros gastos no sistema = tankCapacity - gasolineLevel
        (quanto o sistema acha que foi consumido até agora).
-    2. Novo fator = fator antigo * (refueledGas / litros gastos no sistema).
+    2. Se foram gastos MAIS de 1 litro:
+       Novo fator = fator antigo * (refueledGas / litros gastos no sistema).
        Se foram colocados mais litros do que o sistema calculou, o fator
        aumenta; se foram menos, diminui. Assim o cálculo fica mais preciso.
-    3. O tanque volta para cheio (gasolineLevel = tankCapacity).
+       Com 1 litro ou menos, o fator NÃO muda: com tão pouco consumo, a conta
+       daria um fator distorcido (pequenos erros de leitura viram grandes erros).
+    3. O tanque volta para cheio (gasolineLevel = tankCapacity), mesmo que o
+       fator não tenha sido recalculado, porque o usuário abasteceu de verdade.
     4. sync_version aumenta, para a ESP receber os valores novos.
     """
     serializer = RecalculateSerializer(data=request.data)
@@ -203,14 +210,9 @@ def reset_and_recalculate(request):
             return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
         liters_spent = device.tankCapacity - device.gasolineLevel
-        if liters_spent <= 0:
-            # Tanque cheio: o sistema não registrou consumo, então não há como recalcular
-            return Response(
-                {"detail": "O tanque já está cheio no sistema; não há consumo para recalcular o fator."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if liters_spent > MIN_LITERS_TO_RECALCULATE:
+            device.fuelConsumptionFactor = device.fuelConsumptionFactor * (refueled_gas / liters_spent)
 
-        device.fuelConsumptionFactor = device.fuelConsumptionFactor * (refueled_gas / liters_spent)
         device.gasolineLevel = device.tankCapacity
         device.sync_version += 1
         device.save()

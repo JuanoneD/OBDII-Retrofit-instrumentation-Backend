@@ -5,8 +5,10 @@ Uma view é a função que executa um endpoint: recebe a requisição, faz o
 trabalho e devolve a resposta.
 
 Endpoints deste app:
-- POST /devices/sendDTCs?idDevice=   a ESP32 envia os códigos de erro lidos do carro
-- GET  /devices/getDTCs?idDevice=    o site busca os erros, com título e descrição
+- POST /devices/sendDTCs?idDevice=          a ESP32 envia os códigos de erro lidos do carro
+- GET  /devices/getDTCs?idDevice=           o site busca os erros, com título e descrição
+- POST /devices/<idDevice>/addDetectError   a ESP32 envia uma falha detectada em tempo real
+- GET  /devices/getDetectErrors?idDevice=   o site busca as falhas detectadas
 
 Como funciona o modo diagnóstico:
 1. o usuário liga o modo pelo site (POST /devices/setOperationMode);
@@ -23,11 +25,27 @@ from rest_framework.response import Response
 
 from devices.models import VehicleData, normalize_mac
 
-from .models import DTC, DTCDescription
-from .serializers import SendDTCsSerializer
+from .models import DTC, DetectedError, DTCDescription
+from .serializers import AddDetectErrorSerializer, DetectedErrorSerializer, SendDTCsSerializer
 
 # Título usado quando o código não está na base de erros
 UNKNOWN_TITLE = "Código não encontrado na base"
+DEVICE_NOT_FOUND = {"detail": "ESP não encontrada."}
+INVALID_MAC = {"detail": "idDevice deve ser o MAC da ESP, ex.: AA:BB:CC:DD:EE:FF"}
+
+
+def get_visible_device(request):
+    """
+    Busca a ESP do ?idDevice= que o usuário pode ver:
+    - usuário comum: só as ESPs ligadas à conta dele;
+    - ADM: qualquer ESP.
+    Devolve None se a ESP não existir ou o usuário não puder vê-la.
+    """
+    mac = normalize_mac(request.query_params.get("idDevice", ""))
+    devices = VehicleData.objects.filter(id=mac)
+    if not request.user.isAdm:
+        devices = devices.filter(uservehicledata__user=request.user)
+    return devices.first()
 
 
 @api_view(["POST"])
@@ -41,10 +59,7 @@ def send_dtcs(request):
     """
     mac = normalize_mac(request.query_params.get("idDevice", ""))
     if mac is None:
-        return Response(
-            {"detail": "idDevice deve ser o MAC da ESP, ex.: AA:BB:CC:DD:EE:FF"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response(INVALID_MAC, status=status.HTTP_400_BAD_REQUEST)
 
     serializer = SendDTCsSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)  # lista faltando ou código inválido -> 400
@@ -52,7 +67,7 @@ def send_dtcs(request):
 
     device = VehicleData.objects.filter(id=mac).first()
     if device is None:
-        return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(DEVICE_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
     # Apaga a lista antiga e grava a nova, tudo de uma vez
     with transaction.atomic():
@@ -70,13 +85,9 @@ def get_dtcs(request):
 
     Pode ser usado pelo dono da ESP ou por um ADM.
     """
-    mac = normalize_mac(request.query_params.get("idDevice", ""))
-    devices = VehicleData.objects.filter(id=mac)
-    if not request.user.isAdm:
-        devices = devices.filter(uservehicledata__user=request.user)
-    device = devices.first()
+    device = get_visible_device(request)
     if device is None:
-        return Response({"detail": "ESP não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(DEVICE_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
     dtcs = list(DTC.objects.filter(device=device))
     # Busca na base de erros, de uma vez, as descrições dos códigos recebidos
@@ -93,3 +104,44 @@ def get_dtcs(request):
         })
 
     return Response({"dtcs": result, "totalDtcs": len(result)})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])  # a ESP não faz login, ela se identifica pelo MAC
+def add_detect_error(request, idDevice):
+    """
+    A ESP envia uma falha que detectou em tempo real: {title, description}.
+
+    Os erros se ACUMULAM (histórico): cada envio vira um registro novo.
+    """
+    mac = normalize_mac(idDevice)
+    if mac is None:
+        return Response(INVALID_MAC, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = AddDetectErrorSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)  # título ou descrição faltando -> 400
+
+    device = VehicleData.objects.filter(id=mac).first()
+    if device is None:
+        return Response(DEVICE_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+    DetectedError.objects.create(device=device, **serializer.validated_data)
+    return Response()
+
+
+@api_view(["GET"])
+def get_detect_errors(request):
+    """
+    Devolve as falhas detectadas pela ESP, das mais recentes para as mais antigas.
+
+    Pode ser usado pelo dono da ESP ou por um ADM.
+    """
+    device = get_visible_device(request)
+    if device is None:
+        return Response(DEVICE_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+    errors = DetectedError.objects.filter(device=device)
+    return Response({
+        "errors": DetectedErrorSerializer(errors, many=True).data,
+        "totalErrors": errors.count(),
+    })

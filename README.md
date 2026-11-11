@@ -1,4 +1,4 @@
-# OBDII Retrofit Instrumentation — Backend (v1.1)
+# OBDII Retrofit Instrumentation — Backend (v1.1.1)
 
 API em Python/Django que recebe os dados de combustível enviados pela ESP32,
 guarda num banco MySQL/MariaDB e os entrega para o site (Frontend em React na Vercel).
@@ -17,6 +17,11 @@ A versão 1.1 acrescenta o **modo diagnóstico**: o usuário liga o modo pelo si
 e a ESP passa a ler os códigos de erro (DTCs) do carro. A versão 1.0 continua
 disponível na release `v1.0` do GitHub.
 
+A versão 1.1.1 acrescenta as **falhas detectadas**: a ESP avisa em tempo real
+quando percebe um problema no carro, e o site mostra o histórico dessas falhas.
+Ela também ajusta o recálculo do fator de consumo: o fator só é recalculado se
+o sistema registrou mais de 1 litro de consumo.
+
 ## Estrutura do projeto
 
 | Pasta      | O que tem                                                         |
@@ -24,7 +29,7 @@ disponível na release `v1.0` do GitHub.
 | `config/`  | Configurações do projeto: banco de dados, CORS, rotas principais  |
 | `users/`   | Contas de usuário, login e logout                                 |
 | `devices/` | Dados das ESP32 e vínculo entre usuário e ESP                     |
-| `dtcs/`    | Códigos de erro (DTCs) lidos do carro e a base de erros           |
+| `dtcs/`    | Códigos de erro (DTCs), base de erros e falhas detectadas         |
 
 Dentro de cada app:
 
@@ -42,9 +47,9 @@ Dentro de cada app:
 | **User**             | ID_USER, name, password, email, isAdm                                                                       |
 | **User-VehicleData** | ID, ID_ESP, ID_USER (liga um usuário a uma ESP)                                                             |
 | **VehicleData**      | ID_ESP (MAC), name, gasolineLevel, tankCapacity, fuelConsumptionFactor, totalDistance, tripConsumption, sync_version, diagnoseMode |
-
 | **DTC**              | ID, ID_ESP, code, receivedAt (os códigos de erro que a ESP leu do carro)                                    |
 | **DTCDescription**   | code, title, description (base de erros, em português)                                                     |
+| **DetectedError**    | ID, ID_ESP, title, description, detectedAt (falhas que a ESP detectou em tempo real)                        |
 
 Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usuário.
 
@@ -65,6 +70,8 @@ Um usuário pode ter várias ESPs, e uma ESP pode estar ligada a mais de um usu�
 | POST   | `/devices/setOperationMode?idDevice=`      | Site     | Liga ou desliga o modo diagnóstico                           | Pronto (v1.1) |
 | POST   | `/devices/sendDTCs?idDevice=`              | ESP32    | Envia os códigos de erro lidos do carro                      | Pronto (v1.1) |
 | GET    | `/devices/getDTCs?idDevice=`               | Site     | Lista os códigos de erro, com título e descrição             | Pronto (v1.1) |
+| POST   | `/devices/<idDevice>/addDetectError`       | ESP32    | Envia uma falha detectada em tempo real                      | Pronto (v1.1.1) |
+| GET    | `/devices/getDetectErrors?idDevice=`       | Site     | Lista as falhas detectadas, das mais recentes para as antigas | Pronto (v1.1.1) |
 
 ### Identificação da ESP
 
@@ -198,19 +205,22 @@ informa quantos litros colocou:
 O backend então:
 
 1. calcula os litros gastos no sistema: `tankCapacity − gasolineLevel`;
-2. calcula o novo fator:
-   `Novo Fator = Fator Antigo × (refueledGas / Litros Gastos no Sistema)`;
-3. volta o tanque para cheio (`gasolineLevel = tankCapacity`);
+2. **se os litros gastos forem maiores que 1 L**, calcula o novo fator:
+   `Novo Fator = Fator Antigo × (refueledGas / Litros Gastos no Sistema)`.
+   Com 1 L ou menos, o fator **não muda**: um consumo tão pequeno daria um
+   cálculo impreciso;
+3. em qualquer caso, volta o tanque para cheio (`gasolineLevel = tankCapacity`);
 4. aumenta o `sync_version`, para a ESP receber os valores novos.
 
 O `tripConsumption` não é zerado aqui: ele serve para o km/L da viagem.
 
-Recebe 200 (sem corpo). Erro 400 se faltar o `refueledGas`, se ele não for maior
-que zero ou se o tanque já estiver cheio no sistema (não há consumo para recalcular),
-e 404 se a ESP não existir ou não estiver ligada à conta do usuário (para o ADM, só se não existir).
+Recebe 200 (sem corpo). Erro 400 se faltar o `refueledGas` ou se ele não for maior
+que zero, e 404 se a ESP não existir ou não estiver ligada à conta do usuário (para o ADM, só se não existir).
 
 **Exemplo:** tanque de 55 L com 25 L no sistema (o sistema acha que gastou 30 L).
 O usuário colocou 33 L para encher. Novo fator = 0.008 × 33 / 30 = 0.0088.
+Se o sistema tivesse 54,5 L (gastou só 0,5 L), o fator continuaria 0.008 e o
+tanque voltaria para 55 L.
 
 ### POST `/devices/resetTrip?idDevice=` — zerar a viagem
 
@@ -297,6 +307,44 @@ Recebe (200):
 
 Se um código não estiver na base de erros, ele vem com o título
 `"Código não encontrado na base"` e a descrição vazia.
+Erro 404 se a ESP não existir ou não estiver ligada à conta do usuário
+(para o ADM, só se não existir).
+
+### POST `/devices/<idDevice>/addDetectError` — falha detectada pela ESP32
+
+Não exige Token: a ESP se identifica pelo MAC no endereço. Quando detecta um
+problema em tempo real, ela envia o título e a descrição:
+
+```json
+{ "title": "Superaquecimento", "description": "Temperatura do motor acima de 105 °C" }
+```
+
+As falhas se **acumulam** (histórico): cada envio vira um registro novo, com a
+data e a hora em que chegou.
+
+Recebe 200 (sem corpo). Erro 400 se faltar o `title` ou a `description`, se o
+`title` passar de 200 caracteres ou se o MAC for inválido, e 404 se a ESP não
+existir no banco.
+
+### GET `/devices/getDetectErrors?idDevice=` — falhas detectadas para o site
+
+Exige o Token. Pode ser usado pelo dono da ESP ou por um ADM. As falhas vêm das
+mais recentes para as mais antigas.
+
+Recebe (200):
+```json
+{
+  "errors": [
+    {
+      "title": "Superaquecimento",
+      "description": "Temperatura do motor acima de 105 °C",
+      "detectedAt": "2026-11-11T10:00:00-03:00"
+    }
+  ],
+  "totalErrors": 1
+}
+```
+
 Erro 404 se a ESP não existir ou não estiver ligada à conta do usuário
 (para o ADM, só se não existir).
 

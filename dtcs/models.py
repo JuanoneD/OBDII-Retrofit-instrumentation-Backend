@@ -6,6 +6,8 @@ guarda quando detecta um problema. Exemplo: P0301 = falha de ignição no cilind
 
 - DTC: os códigos de erro que cada ESP leu do carro.
 - DTCDescription: a "base de erros", com o título e a descrição de cada código.
+- DetectedError: falhas que a própria ESP detecta em tempo real (ex.: motor
+  superaquecendo), já enviadas com título e descrição.
 """
 
 import re
@@ -60,3 +62,24 @@ class DTC(models.Model):
 
     def __str__(self):
         return f"{self.device_id} - {self.code}"
+
+
+class DetectedError(models.Model):
+    """
+    Uma falha detectada pela ESP em tempo real.
+
+    Os erros se acumulam (histórico): cada envio da ESP vira um registro novo.
+    """
+
+    id = models.BigAutoField(primary_key=True, db_column="ID")
+    device = models.ForeignKey(VehicleData, on_delete=models.CASCADE, db_column="ID_ESP")
+    title = models.CharField(max_length=200)  # ex.: "Superaquecimento do motor"
+    description = models.TextField()  # explicação da falha
+    detectedAt = models.DateTimeField(auto_now_add=True)  # quando o backend recebeu
+
+    class Meta:
+        db_table = "DetectedError"
+        ordering = ["-detectedAt", "-id"]  # mais recentes primeiro
+
+    def __str__(self):
+        return f"{self.device_id} - {self.title}"
